@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        php: [ "8.1", "8.2", "8.3", "8.4" ]
+        include:
+          # Run coverage only on the latest PHP version
+          - php: "8.4"
+            os: ubuntu-latest
+            coverage: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, curl, json
+          coverage: ${{ matrix.coverage && 'pcov' || 'none' }}
+          tools: composer:v2
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Cache Composer packages
+        id: composer-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php${{ matrix.php }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php${{ matrix.php }}-composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run tests (without coverage)
+        if: ${{ !matrix.coverage }}
+        run: vendor/bin/phpunit
+
+      - name: Run tests with coverage
+        if: ${{ matrix.coverage }}
+        run: vendor/bin/phpunit --coverage-text --coverage-clover=coverage.xml
+
+      - name: Check coverage threshold (80%)
+        if: ${{ matrix.coverage }}
+        run: |
+          LINES=$(php -r "
+            \$xml = simplexml_load_file('coverage.xml');
+            \$metrics = \$xml->project->metrics;
+            \$covered = (int)\$metrics['coveredstatements'];
+            \$total   = (int)\$metrics['statements'];
+            echo \$total > 0 ? round(\$covered / \$total * 100, 2) : 0;
+          ")
+          echo "Line coverage: ${LINES}%"
+          php -r "if ((float)'{$LINES}' < 80) { echo 'Coverage is below 80%!\n'; exit(1); } echo 'Coverage OK.\n';"
+
+      - name: Upload coverage to Codecov
+        if: ${{ matrix.coverage }}
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          fail_ci_if_error: false

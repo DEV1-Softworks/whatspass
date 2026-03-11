@@ -1,0 +1,70 @@
+{
+    "name": "dev1/whatspass",
+    "description": "Send OTP authentication messages via WhatsApp using Meta's official Cloud API. Supports Laravel and Symfony.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "whatsapp",
+        "otp",
+        "meta",
+        "authentication",
+        "laravel",
+        "symfony",
+        "2fa",
+        "mfa",
+        "whatsapp-api"
+    ],
+    "authors": [
+        {
+            "name": "DEV1",
+            "email": "dev@dev1.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "guzzlehttp/guzzle": "^7.5",
+        "psr/log": "^2.0|^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0",
+        "mockery/mockery": "^1.6",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "symfony/dependency-injection": "^6.4|^7.0",
+        "symfony/config": "^6.4|^7.0",
+        "symfony/http-kernel": "^6.4|^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Dev1\\Whatspass\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Dev1\\Whatspass\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Dev1\\Whatspass\\Laravel\\WhatspassServiceProvider"
+            ],
+            "aliases": {
+                "Whatspass": "Dev1\\Whatspass\\Laravel\\Facades\\Whatspass"
+            }
+        }
+    },
+    "suggest": {
+        "illuminate/support": "Required for Laravel integration (^10.0|^11.0|^12.0)",
+        "symfony/dependency-injection": "Required for Symfony integration (^6.4|^7.0)"
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:coverage": "@php -d xdebug.mode=coverage vendor/bin/phpunit --coverage-text"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
