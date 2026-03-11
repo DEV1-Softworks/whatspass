@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Dev1\Whatspass;
 
+use Dev1\Whatspass\Contracts\RateLimiterInterface;
 use Dev1\Whatspass\Contracts\WhatspassServiceInterface;
+use Dev1\Whatspass\RateLimiter\NullRateLimiter;
 
 class WhatspassService implements WhatspassServiceInterface
 {
@@ -12,6 +14,7 @@ class WhatspassService implements WhatspassServiceInterface
         private readonly WhatspassConfig $config,
         private readonly WhatspassClient $client,
         private readonly OtpGenerator $generator,
+        private readonly RateLimiterInterface $rateLimiter = new NullRateLimiter(),
     ) {}
 
     /**
@@ -41,6 +44,8 @@ class WhatspassService implements WhatspassServiceInterface
      */
     public function sendOtp(string $phoneNumber, string $otp, array $options = []): array
     {
+        $this->rateLimiter->attempt($phoneNumber);
+
         $message = new OtpMessage(
             to: $phoneNumber,
             otp: $otp,
@@ -85,6 +90,8 @@ class WhatspassService implements WhatspassServiceInterface
      */
     public function send(OtpMessage $message): array
     {
+        $this->rateLimiter->attempt($message->getTo());
+
         return $this->client->sendMessage($message);
     }
 }

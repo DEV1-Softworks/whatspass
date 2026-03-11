@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Dev1\Whatspass\Laravel;
 
+use Dev1\Whatspass\Contracts\RateLimiterInterface;
 use Dev1\Whatspass\Contracts\WhatspassServiceInterface;
 use Dev1\Whatspass\OtpGenerator;
+use Dev1\Whatspass\RateLimiter\NullRateLimiter;
 use Dev1\Whatspass\WhatspassClient;
 use Dev1\Whatspass\WhatspassConfig;
 use Dev1\Whatspass\WhatspassService;
@@ -39,16 +41,20 @@ class WhatspassServiceProvider extends ServiceProvider
 
         $this->app->singleton(OtpGenerator::class, fn () => new OtpGenerator());
 
+        $this->app->bindIf(RateLimiterInterface::class, NullRateLimiter::class);
+
         $this->app->singleton(WhatspassService::class, function ($app) {
             return new WhatspassService(
                 config: $app->make(WhatspassConfig::class),
                 client: $app->make(WhatspassClient::class),
                 generator: $app->make(OtpGenerator::class),
+                rateLimiter: $app->make(RateLimiterInterface::class),
             );
         });
 
         $this->app->alias(WhatspassService::class, WhatspassServiceInterface::class);
         $this->app->alias(WhatspassService::class, 'whatspass');
+        $this->app->alias(RateLimiterInterface::class, 'whatspass.rate_limiter');
     }
 
     public function boot(): void
@@ -70,8 +76,10 @@ class WhatspassServiceProvider extends ServiceProvider
             WhatspassClient::class,
             WhatspassService::class,
             WhatspassServiceInterface::class,
+            RateLimiterInterface::class,
             OtpGenerator::class,
             'whatspass',
+            'whatspass.rate_limiter',
         ];
     }
 }

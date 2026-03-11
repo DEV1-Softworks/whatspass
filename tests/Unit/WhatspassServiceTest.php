@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Dev1\Whatspass\Tests\Unit;
 
+use Dev1\Whatspass\Contracts\RateLimiterInterface;
 use Dev1\Whatspass\Exceptions\ApiException;
+use Dev1\Whatspass\Exceptions\RateLimitExceededException;
 use Dev1\Whatspass\MessageType;
 use Dev1\Whatspass\OtpGenerator;
 use Dev1\Whatspass\OtpMessage;
@@ -236,5 +238,83 @@ class WhatspassServiceTest extends TestCase
         $this->expectExceptionMessage('API error');
 
         $this->service->sendOtp('+15551234567', '123456');
+    }
+
+    public function test_send_otp_calls_rate_limiter(): void
+    {
+        $mockLimiter = Mockery::mock(RateLimiterInterface::class);
+        $mockLimiter->shouldReceive('attempt')->once()->with('+15551234567');
+
+        $this->mockClient->shouldReceive('sendMessage')->once()->andReturn([]);
+
+        $service = new WhatspassService(
+            config: $this->config,
+            client: $this->mockClient,
+            generator: new OtpGenerator(),
+            rateLimiter: $mockLimiter,
+        );
+
+        $service->sendOtp('+15551234567', '123456');
+    }
+
+    public function test_send_otp_throws_when_rate_limit_exceeded(): void
+    {
+        $mockLimiter = Mockery::mock(RateLimiterInterface::class);
+        $mockLimiter->shouldReceive('attempt')->once()
+            ->andThrow(new RateLimitExceededException('+15551234567'));
+
+        $this->mockClient->shouldReceive('sendMessage')->never();
+
+        $service = new WhatspassService(
+            config: $this->config,
+            client: $this->mockClient,
+            generator: new OtpGenerator(),
+            rateLimiter: $mockLimiter,
+        );
+
+        $this->expectException(RateLimitExceededException::class);
+
+        $service->sendOtp('+15551234567', '123456');
+    }
+
+    public function test_send_method_calls_rate_limiter(): void
+    {
+        $message = new OtpMessage(to: '+15551234567', otp: '123456');
+
+        $mockLimiter = Mockery::mock(RateLimiterInterface::class);
+        $mockLimiter->shouldReceive('attempt')->once()->with('+15551234567');
+
+        $this->mockClient->shouldReceive('sendMessage')->once()->andReturn([]);
+
+        $service = new WhatspassService(
+            config: $this->config,
+            client: $this->mockClient,
+            generator: new OtpGenerator(),
+            rateLimiter: $mockLimiter,
+        );
+
+        $service->send($message);
+    }
+
+    public function test_send_method_throws_when_rate_limit_exceeded(): void
+    {
+        $message = new OtpMessage(to: '+15551234567', otp: '123456');
+
+        $mockLimiter = Mockery::mock(RateLimiterInterface::class);
+        $mockLimiter->shouldReceive('attempt')->once()
+            ->andThrow(new RateLimitExceededException('+15551234567'));
+
+        $this->mockClient->shouldReceive('sendMessage')->never();
+
+        $service = new WhatspassService(
+            config: $this->config,
+            client: $this->mockClient,
+            generator: new OtpGenerator(),
+            rateLimiter: $mockLimiter,
+        );
+
+        $this->expectException(RateLimitExceededException::class);
+
+        $service->send($message);
     }
 }

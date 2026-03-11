@@ -3,7 +3,7 @@
 [![CI](https://github.com/dev1/whatspass/actions/workflows/ci.yml/badge.svg)](https://github.com/dev1/whatspass/actions/workflows/ci.yml)
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/dev1/whatspass.svg)](https://packagist.org/packages/dev1/whatspass)
 [![PHP Version](https://img.shields.io/packagist/php-v/dev1/whatspass.svg)](https://packagist.org/packages/dev1/whatspass)
-[![License](https://img.shields.io/packagist/l/dev1/whatspass.svg)](LICENSE)
+[![License](https://img.shields.io/packagist/l/dev1/whatspass.svg)](LICENSE.md)
 
 **Send OTP authentication codes via WhatsApp using Meta's official Cloud API.**
 
@@ -15,8 +15,8 @@ Whatspass is a framework-agnostic PHP library with first-class support for **Lar
 
 | Requirement | Version |
 |-------------|---------|
-| PHP | ≥ 8.1 |
-| Laravel (optional) | 10, 11, or 12 |
+| PHP | ≥ 8.2 |
+| Laravel (optional) | 11 or 12 |
 | Symfony (optional) | 6.4 or 7.x |
 
 ---
@@ -36,7 +36,7 @@ You need a **Meta for Developers** account with a WhatsApp Business App. Here is
 1. Go to [developers.facebook.com](https://developers.facebook.com) and create an App (type: **Business**).
 2. Add the **WhatsApp** product to your app.
 3. In *WhatsApp → API Setup*, copy your:
-   - **Phone Number ID** — identifies the number you send from.
+   - **Phone Number ID** — the numeric ID that identifies the number you send from.
    - **Temporary access token** — or generate a permanent System User token from the Business Manager.
 4. Create and get a **Message Template** approved in the Meta Business Manager. For OTP delivery, a simple body like *"Your verification code is {{1}}."* is all you need.
 
@@ -56,10 +56,20 @@ This creates `config/whatspass.php`.
 
 ### 2. Set environment variables
 
+Copy `.env.example` entries to your `.env` file and fill in your credentials:
+
 ```env
-WHATSPASS_PHONE_NUMBER_ID=your_phone_number_id
-WHATSPASS_ACCESS_TOKEN=your_access_token
+# Required
+WHATSPASS_PHONE_NUMBER_ID=123456789012345
+WHATSPASS_ACCESS_TOKEN=your_access_token_here
+
+# Optional (defaults shown)
+WHATSPASS_API_VERSION=v19.0
 WHATSPASS_TEMPLATE_NAME=otp_authentication
+WHATSPASS_LANGUAGE_CODE=en_US
+WHATSPASS_OTP_LENGTH=6
+WHATSPASS_OTP_EXPIRY=300
+WHATSPASS_ALPHANUMERIC_OTP=false
 ```
 
 ### 3. Send an OTP
@@ -106,15 +116,59 @@ class AuthController extends Controller
 ```php
 // config/whatspass.php
 return [
-    'phone_number_id'      => env('WHATSPASS_PHONE_NUMBER_ID'),
-    'access_token'         => env('WHATSPASS_ACCESS_TOKEN'),
-    'api_version'          => env('WHATSPASS_API_VERSION', 'v19.0'),
-    'default_template_name'=> env('WHATSPASS_TEMPLATE_NAME', 'otp_authentication'),
-    'default_language_code'=> env('WHATSPASS_LANGUAGE_CODE', 'en_US'),
-    'otp_length'           => env('WHATSPASS_OTP_LENGTH', 6),     // 4–12 characters
-    'otp_expiry'           => env('WHATSPASS_OTP_EXPIRY', 300),   // seconds (≥ 60)
-    'alphanumeric_otp'     => env('WHATSPASS_ALPHANUMERIC_OTP', false),
+    'phone_number_id'       => env('WHATSPASS_PHONE_NUMBER_ID'),
+    'access_token'          => env('WHATSPASS_ACCESS_TOKEN'),
+    'api_version'           => env('WHATSPASS_API_VERSION', 'v19.0'),
+    'base_url'              => env('WHATSPASS_BASE_URL', 'https://graph.facebook.com'),
+    'default_template_name' => env('WHATSPASS_TEMPLATE_NAME', 'otp_authentication'),
+    'default_language_code' => env('WHATSPASS_LANGUAGE_CODE', 'en_US'),
+    'otp_length'            => (int) env('WHATSPASS_OTP_LENGTH', 6),     // 4–12 characters
+    'otp_expiry'            => (int) env('WHATSPASS_OTP_EXPIRY', 300),   // seconds (≥ 60)
+    'alphanumeric_otp'      => (bool) env('WHATSPASS_ALPHANUMERIC_OTP', false),
 ];
+```
+
+### Rate limiting (Laravel)
+
+By default the library uses a no-op rate limiter. To enforce per-phone-number limits in production, bind your own implementation to `RateLimiterInterface`:
+
+```php
+// app/Providers/AppServiceProvider.php
+use Dev1\Whatspass\Contracts\RateLimiterInterface;
+use App\Services\RedisWhatspassRateLimiter;
+
+public function register(): void
+{
+    $this->app->bind(RateLimiterInterface::class, RedisWhatspassRateLimiter::class);
+}
+```
+
+Example implementation using Laravel Cache:
+
+```php
+use Dev1\Whatspass\Contracts\RateLimiterInterface;
+use Dev1\Whatspass\Exceptions\RateLimitExceededException;
+use Illuminate\Support\Facades\Cache;
+
+class CacheRateLimiter implements RateLimiterInterface
+{
+    public function __construct(
+        private readonly int $maxAttempts = 3,
+        private readonly int $decaySeconds = 60,
+    ) {}
+
+    public function attempt(string $phoneNumber): void
+    {
+        $key   = 'whatspass:' . hash('sha256', $phoneNumber);
+        $hits  = (int) Cache::get($key, 0);
+
+        if ($hits >= $this->maxAttempts) {
+            throw new RateLimitExceededException($phoneNumber);
+        }
+
+        Cache::put($key, $hits + 1, $this->decaySeconds);
+    }
+}
 ```
 
 ---
@@ -146,6 +200,13 @@ whatspass:
     alphanumeric_otp:      false
 ```
 
+Set the required values in your `.env` file:
+
+```env
+WHATSPASS_PHONE_NUMBER_ID=123456789012345
+WHATSPASS_ACCESS_TOKEN=your_access_token_here
+```
+
 ### 3. Send an OTP
 
 ```php
@@ -169,6 +230,22 @@ class AuthController extends AbstractController
 }
 ```
 
+### Rate limiting (Symfony)
+
+Register your implementation as an alias for `RateLimiterInterface`:
+
+```yaml
+# config/services.yaml
+services:
+    App\Service\WhatspassRateLimiter:
+        arguments:
+            $maxAttempts: 3
+            $decaySeconds: 60
+
+    Dev1\Whatspass\Contracts\RateLimiterInterface:
+        alias: App\Service\WhatspassRateLimiter
+```
+
 ---
 
 ## Framework-agnostic usage
@@ -182,8 +259,8 @@ use Dev1\Whatspass\WhatspassConfig;
 use Dev1\Whatspass\WhatspassService;
 
 $config = WhatspassConfig::fromArray([
-    'phone_number_id' => 'YOUR_PHONE_NUMBER_ID',
-    'access_token'    => 'YOUR_ACCESS_TOKEN',
+    'phone_number_id' => getenv('WHATSPASS_PHONE_NUMBER_ID'),
+    'access_token'    => getenv('WHATSPASS_ACCESS_TOKEN'),
     'otp_length'      => 6,
 ]);
 
@@ -215,8 +292,8 @@ All methods are available through the facade, dependency injection, or direct in
 Generate a cryptographically secure OTP code.
 
 ```php
-$otp = $service->generateOtp();              // "483920"   (6-digit numeric, from config)
-$otp = $service->generateOtp(length: 8);    // "20938471"
+$otp = $service->generateOtp();                   // "483920"   (6-digit numeric, from config)
+$otp = $service->generateOtp(length: 8);          // "20938471"
 $otp = $service->generateOtp(alphanumeric: true); // "4aB9Qz"
 ```
 
@@ -275,10 +352,10 @@ use Dev1\Whatspass\MessageType;
 use Dev1\Whatspass\OtpMessage;
 
 $message = new OtpMessage(
-    to:             '+15551234567',
-    otp:            '839201',
-    type:           MessageType::Text,
-    customMessage:  'Hi! Your login code is {otp}.',
+    to:            '+15551234567',
+    otp:           '839201',
+    type:          MessageType::Text,
+    customMessage: 'Hi! Your login code is {otp}.',
 );
 
 $response = $service->send($message);
@@ -296,7 +373,7 @@ Phone numbers are automatically normalized to **E.164** format. All of these are
 15551234567        →  +15551234567
 ```
 
-An `InvalidPhoneNumberException` is thrown if the number cannot be normalized (e.g. too short, starts with `0`, or contains letters).
+An `InvalidPhoneNumberException` is thrown if the number cannot be normalized (e.g. too short, longer than 30 characters, starts with `0`, or contains letters).
 
 ---
 
@@ -304,20 +381,21 @@ An `InvalidPhoneNumberException` is thrown if the number cannot be normalized (e
 
 ```php
 use Dev1\Whatspass\Exceptions\ApiException;
-use Dev1\Whatspass\Exceptions\InvalidPhoneNumberException;
 use Dev1\Whatspass\Exceptions\InvalidConfigException;
+use Dev1\Whatspass\Exceptions\InvalidPhoneNumberException;
+use Dev1\Whatspass\Exceptions\RateLimitExceededException;
 
 try {
     $result = $service->generateAndSend($phone);
+} catch (RateLimitExceededException $e) {
+    // Too many OTP requests for this phone number
+    return response()->json(['message' => 'Too many requests. Please wait and try again.'], 429);
 } catch (InvalidPhoneNumberException $e) {
     // The phone number format is invalid
     logger()->warning('Bad phone number', ['error' => $e->getMessage()]);
 } catch (ApiException $e) {
     // Meta API returned an error (4xx/5xx) or the connection failed
-    logger()->error('WhatsApp API error', [
-        'code'  => $e->getCode(),       // HTTP status code
-        'error' => $e->getApiError(),   // Raw error body from Meta
-    ]);
+    logger()->error('WhatsApp API error', ['code' => $e->getCode()]);
 } catch (InvalidConfigException $e) {
     // Misconfigured phone_number_id, access_token, otp_length, etc.
 }
@@ -328,12 +406,27 @@ try {
 ```
 \RuntimeException
 └── WhatspassException
-    └── ApiException          — Meta API / network errors
+    ├── ApiException              — Meta API / network errors
+    └── RateLimitExceededException — Rate limit hit for a phone number
 
 \InvalidArgumentException
-├── InvalidConfigException    — Bad configuration values
-└── InvalidPhoneNumberException — Unparseable phone number
+├── InvalidConfigException        — Bad configuration values
+└── InvalidPhoneNumberException   — Unparseable phone number
 ```
+
+---
+
+## Security
+
+The library enforces the following security constraints out of the box:
+
+- **HTTPS only** — `base_url` must start with `https://`. Plain HTTP is rejected at config-load time.
+- **TLS verification** — Guzzle is explicitly configured with `verify: true`. It cannot be silently disabled.
+- **Numeric Phone Number ID** — `phone_number_id` must be all digits, matching Meta's format.
+- **Phone masking in logs** — recipients are logged as `+155*****67` to avoid PII leakage.
+- **Redacted API errors** — only `error_code` and `error_type` are logged; full Meta error bodies are never written to logs.
+- **Cryptographic OTP generation** — all codes are generated with `random_int()` (CSPRNG).
+- **ReDoS guard** — phone number inputs longer than 30 characters are rejected before any regex processing.
 
 ---
 
@@ -341,9 +434,11 @@ try {
 
 `WhatspassClient` accepts any PSR-3 logger. In Laravel and Symfony it is injected automatically. When provided, it logs:
 
-- **`debug`** — before every request (endpoint, message type, recipient)
-- **`info`** — on success (recipient, Meta message ID)
-- **`error`** — on API errors and connection failures
+- **`debug`** — before every request (masked recipient, message type)
+- **`info`** — on success (masked recipient, Meta message ID)
+- **`error`** — on API errors (HTTP status, error code and type only) and connection failures (exception class only)
+
+Phone numbers are always masked in log output (e.g. `+155*****67`).
 
 ---
 
@@ -380,7 +475,7 @@ $mock = new MockHandler([
 
 $httpClient = new Client(['handler' => HandlerStack::create($mock)]);
 $config     = WhatspassConfig::fromArray([
-    'phone_number_id' => 'test-id',
+    'phone_number_id' => '123456789012345',
     'access_token'    => 'test-token',
 ]);
 
@@ -402,7 +497,7 @@ The repository ships with two GitHub Actions workflows:
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| **CI** (`.github/workflows/ci.yml`) | Push / PR to `main`, `master`, `develop` | Runs the test suite on PHP 8.1–8.4 and enforces ≥ 80% coverage |
+| **CI** (`.github/workflows/ci.yml`) | Push / PR to `main`, `master`, `develop` | Runs the test suite on PHP 8.2, 8.3, and 8.4, and enforces ≥ 80% coverage |
 | **Release** (`.github/workflows/release.yml`) | Push of a `v*.*.*` tag | Runs tests, then creates a GitHub Release with auto-generated notes |
 
 ### Publishing a release
@@ -433,4 +528,4 @@ composer require dev1/whatspass
 
 ## License
 
-The MIT License (MIT). See [LICENSE](LICENSE) for details.
+The MIT License (MIT). See [LICENSE.md](LICENSE.md) for details.

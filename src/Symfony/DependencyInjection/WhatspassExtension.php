@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Dev1\Whatspass\Symfony\DependencyInjection;
 
+use Dev1\Whatspass\Contracts\RateLimiterInterface;
 use Dev1\Whatspass\Contracts\WhatspassServiceInterface;
 use Dev1\Whatspass\OtpGenerator;
+use Dev1\Whatspass\RateLimiter\NullRateLimiter;
 use Dev1\Whatspass\WhatspassClient;
 use Dev1\Whatspass\WhatspassConfig;
 use Dev1\Whatspass\WhatspassService;
@@ -53,12 +55,20 @@ class WhatspassExtension extends Extension
         $generatorDefinition = new Definition(OtpGenerator::class);
         $container->setDefinition(OtpGenerator::class, $generatorDefinition);
 
+        // Register NullRateLimiter as default — replace with a real implementation via alias
+        if (!$container->has(RateLimiterInterface::class)) {
+            $rateLimiterDefinition = new Definition(NullRateLimiter::class);
+            $container->setDefinition(NullRateLimiter::class, $rateLimiterDefinition);
+            $container->setAlias(RateLimiterInterface::class, NullRateLimiter::class);
+        }
+
         // Register WhatspassService
         $serviceDefinition = new Definition(WhatspassService::class);
         $serviceDefinition->setArguments([
             new Reference(WhatspassConfig::class),
             new Reference(WhatspassClient::class),
             new Reference(OtpGenerator::class),
+            new Reference(RateLimiterInterface::class),
         ]);
         $serviceDefinition->setPublic(true);
         $container->setDefinition(WhatspassService::class, $serviceDefinition);
