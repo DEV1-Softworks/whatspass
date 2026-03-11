@@ -40,7 +40,7 @@ class WhatspassConfigTest extends TestCase
     public function test_creates_config_with_custom_values(): void
     {
         $config = new WhatspassConfig(
-            phoneNumberId: 'phone-id',
+            phoneNumberId: '9876543210',
             accessToken: 'my-token',
             apiVersion: 'v20.0',
             baseUrl: 'https://custom.api.com',
@@ -73,6 +73,22 @@ class WhatspassConfigTest extends TestCase
         $this->expectException(InvalidConfigException::class);
 
         new WhatspassConfig(phoneNumberId: '   ', accessToken: 'token');
+    }
+
+    public function test_throws_exception_for_non_numeric_phone_number_id(): void
+    {
+        $this->expectException(InvalidConfigException::class);
+        $this->expectExceptionMessageMatches('/phone_number_id/i');
+
+        new WhatspassConfig(phoneNumberId: 'phone-id', accessToken: 'token');
+    }
+
+    public function test_throws_exception_for_http_base_url(): void
+    {
+        $this->expectException(InvalidConfigException::class);
+        $this->expectExceptionMessageMatches('/base_url/i');
+
+        new WhatspassConfig(phoneNumberId: '123456789', accessToken: 'token', baseUrl: 'http://graph.facebook.com');
     }
 
     public function test_throws_exception_for_empty_access_token(): void
@@ -139,11 +155,11 @@ class WhatspassConfigTest extends TestCase
     public function test_from_array_creates_config_with_required_keys(): void
     {
         $config = WhatspassConfig::fromArray([
-            'phone_number_id' => 'pid-123',
+            'phone_number_id' => '123456789',
             'access_token' => 'tok-abc',
         ]);
 
-        $this->assertSame('pid-123', $config->phoneNumberId);
+        $this->assertSame('123456789', $config->phoneNumberId);
         $this->assertSame('tok-abc', $config->accessToken);
         $this->assertSame('v19.0', $config->apiVersion);
     }
@@ -151,7 +167,7 @@ class WhatspassConfigTest extends TestCase
     public function test_from_array_creates_config_with_all_keys(): void
     {
         $config = WhatspassConfig::fromArray([
-            'phone_number_id' => 'pid-123',
+            'phone_number_id' => '123456789',
             'access_token' => 'tok-abc',
             'api_version' => 'v20.0',
             'base_url' => 'https://custom.url',

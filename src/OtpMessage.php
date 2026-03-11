@@ -77,6 +77,11 @@ class OtpMessage
      */
     private function normalizePhoneNumber(string $phone): string
     {
+        // Guard against excessively long input before regex processing
+        if (strlen($phone) > 30) {
+            throw new InvalidPhoneNumberException('Phone number is too long.');
+        }
+
         // Strip whitespace, dashes, dots, and parentheses
         $normalized = preg_replace('/[\s\-\.\(\)]/', '', $phone);
 

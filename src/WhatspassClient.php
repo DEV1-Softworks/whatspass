@@ -25,9 +25,21 @@ class WhatspassClient
         $this->httpClient = $httpClient ?? new Client([
             'timeout' => 30,
             'connect_timeout' => 10,
+            'verify' => true,
         ]);
 
         $this->logger = $logger ?? new NullLogger();
+    }
+
+    private function maskPhone(string $phone): string
+    {
+        $len = strlen($phone);
+
+        if ($len <= 6) {
+            return str_repeat('*', $len);
+        }
+
+        return substr($phone, 0, 4) . str_repeat('*', $len - 6) . substr($phone, -2);
     }
 
     /**
@@ -45,9 +57,8 @@ class WhatspassClient
         );
 
         $this->logger->debug('Sending WhatsApp OTP message', [
-            'to' => $message->getTo(),
+            'to' => $this->maskPhone($message->getTo()),
             'type' => $message->getType()->value,
-            'endpoint' => $this->config->getApiEndpoint(),
         ]);
 
         try {
@@ -63,7 +74,7 @@ class WhatspassClient
             $body = json_decode($response->getBody()->getContents(), true) ?? [];
 
             $this->logger->info('WhatsApp OTP sent successfully', [
-                'to' => $message->getTo(),
+                'to' => $this->maskPhone($message->getTo()),
                 'message_id' => $body['messages'][0]['id'] ?? null,
             ]);
 
@@ -75,7 +86,8 @@ class WhatspassClient
 
             $this->logger->error('WhatsApp API client error', [
                 'status' => $e->getResponse()->getStatusCode(),
-                'error' => $errorBody,
+                'error_code' => $errorBody['error']['code'] ?? null,
+                'error_type' => $errorBody['error']['type'] ?? null,
             ]);
 
             throw new ApiException(
@@ -86,11 +98,11 @@ class WhatspassClient
             );
         } catch (GuzzleException $e) {
             $this->logger->error('WhatsApp API connection error', [
-                'error' => $e->getMessage(),
+                'error_class' => get_class($e),
             ]);
 
             throw new ApiException(
-                message: 'Failed to connect to the WhatsApp API: ' . $e->getMessage(),
+                message: 'Failed to connect to the WhatsApp API.',
                 code: $e->getCode(),
                 previous: $e,
             );

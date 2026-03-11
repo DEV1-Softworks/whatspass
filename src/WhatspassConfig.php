@@ -23,8 +23,16 @@ class WhatspassConfig
             throw new InvalidConfigException('The "phone_number_id" configuration value is required.');
         }
 
+        if (!ctype_digit($phoneNumberId)) {
+            throw new InvalidConfigException('The "phone_number_id" must contain only digits.');
+        }
+
         if (empty(trim($accessToken))) {
             throw new InvalidConfigException('The "access_token" configuration value is required.');
+        }
+
+        if (!str_starts_with($baseUrl, 'https://')) {
+            throw new InvalidConfigException('The "base_url" must use HTTPS.');
         }
 
         if ($otpLength < 4 || $otpLength > 12) {

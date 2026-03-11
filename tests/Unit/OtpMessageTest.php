@@ -69,6 +69,13 @@ class OtpMessageTest extends TestCase
         new OtpMessage(to: '+123456', otp: '123456'); // only 6 digits after +1, needs 7–15
     }
 
+    public function test_throws_for_phone_number_exceeding_max_length(): void
+    {
+        $this->expectException(InvalidPhoneNumberException::class);
+
+        new OtpMessage(to: str_repeat('1', 31), otp: '123456');
+    }
+
     public function test_throws_for_empty_otp(): void
     {
         $this->expectException(InvalidArgumentException::class);
