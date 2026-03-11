@@ -4,7 +4,7 @@
          bootstrap="vendor/autoload.php"
          colors="true"
          cacheDirectory=".phpunit.cache">
-    <!-- Run with: php -d xdebug.mode=coverage vendor/bin/phpunit --coverage-text -->
+    <!-- Run with: php -d xdebug.mode=coverage vendor/bin/phpunit [coverage-text] -->
 
     <testsuites>
         <testsuite name="Unit">
