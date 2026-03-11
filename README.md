@@ -511,21 +511,8 @@ The Release workflow runs the full test suite and creates a GitHub Release autom
 
 ---
 
-## Publishing to Packagist
-
-1. Push your repository to GitHub (must be public, or a private Packagist plan).
-2. Go to [packagist.org](https://packagist.org) and click **Submit**.
-3. Enter your repository URL. Packagist reads `composer.json` and registers the package as `dev1/whatspass`.
-4. Set up the **GitHub webhook** shown by Packagist so the package updates automatically on every push.
-
-After that, anyone can install your package with:
-
-```bash
-composer require dev1/whatspass
-```
-
----
-
 ## License
 
 The MIT License (MIT). See [LICENSE.md](LICENSE.md) for details.
+
+Made in Mexico with ❤️ by [DEV1 Labs](https://dev1.mx/labs), part of DEV1 Softworks.
