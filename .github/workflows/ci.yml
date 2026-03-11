@@ -51,7 +51,7 @@ jobs:
 
       - name: Run tests (without coverage)
         if: ${{ !matrix.coverage }}
-        run: vendor/bin/phpunit
+        run: vendor/bin/phpunit --no-coverage
 
       - name: Run tests with coverage
         if: ${{ matrix.coverage }}
