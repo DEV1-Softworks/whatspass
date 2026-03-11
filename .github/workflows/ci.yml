@@ -68,7 +68,7 @@ jobs:
             echo \$total > 0 ? round(\$covered / \$total * 100, 2) : 0;
           ")
           echo "Line coverage: ${LINES}%"
-          php -r "if ((float)'{$LINES}' < 80) { echo 'Coverage is below 80%!\n'; exit(1); } echo 'Coverage OK.\n';"
+          awk "BEGIN { if ($LINES < 80) { print \"Coverage is below 80%!\"; exit 1 } else { print \"Coverage OK.\" } }"
 
       - name: Upload coverage to Codecov
         if: ${{ matrix.coverage }}
